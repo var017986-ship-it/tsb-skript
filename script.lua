@@ -1,11 +1,11 @@
 -- ====================================================================
--- The Strongest Battlegrounds (TSB) M1 Combo, Q-Dash & Skill Weaver v9.1
+-- The Strongest Battlegrounds (TSB) Pro Combat Engine v10.0 (InputBegan Event Hook)
 -- File: script.lua
 -- Repository: https://github.com/var017986-ship-it/tsb-skript
--- Features: 1. Dedicated M1 Punch Combo (4 Consecutive M1 Clicks)
---           2. Real Q-Key Dash Mechanics (Enum.KeyCode.Q & Hex 0x51)
---           3. Timed Skill Activation (Skills 1,2,3,4)
---           4. 3X Hyper Speed Sprint & Anti-Counter Evasion
+-- Features: 1. Native getconnections(InputBegan) Hook for M1 Punch Attacks
+--           2. Native getconnections(InputBegan) Hook for Q-Dash Evades
+--           3. Multi-Layer Skill Activator (1, 2, 3, 4)
+--           4. 3X Hyper Speed Sprint & Anti-Counter 25-stud Evasion
 -- ====================================================================
 
 local Players = game:GetService("Players")
@@ -13,6 +13,7 @@ local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local VirtualUser = game:GetService("VirtualUser")
+local UserInputService = game:GetService("UserInputService")
 local StarterGui = game:GetService("StarterGui")
 local CoreGui = game:GetService("CoreGui")
 local VirtualInputManager = game:GetService("VirtualInputManager")
@@ -42,31 +43,36 @@ pcall(function()
 end)
 
 -----------------------------------------------------------------------
--- Guaranteed M1 Mouse Punch Trigger (Center Viewport Click)
+-- Guaranteed M1 Mouse Punch Trigger (InputBegan Hook + Center Click)
 -----------------------------------------------------------------------
 local function performM1Click()
     pcall(function()
+        -- Method 1: Fire UserInputService.InputBegan connections directly (TSB Native Event Hook)
+        if getconnections then
+            for _, conn in ipairs(getconnections(UserInputService.InputBegan)) do
+                pcall(function()
+                    conn:Fire({
+                        UserInputType = Enum.UserInputType.MouseButton1,
+                        UserInputState = Enum.UserInputState.Begin,
+                        KeyCode = Enum.KeyCode.Unknown
+                    }, false)
+                end)
+            end
+        end
+
+        -- Method 2: Center Viewport VirtualInputManager Click
         local camera = Workspace.CurrentCamera
         local vp = camera and camera.ViewportSize or Vector2.new(800, 600)
         local cx = math.floor(vp.X / 2)
         local cy = math.floor(vp.Y / 2)
 
-        -- 1. VirtualInputManager Mouse 1 Press & Release
         pcall(function()
             VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, true, game, 1)
             task.wait(0.015)
             VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, false, game, 1)
         end)
 
-        -- 2. VirtualUser Mouse 1 Click
-        pcall(function()
-            VirtualUser:CaptureController()
-            VirtualUser:Button1Down(Vector2.new(cx, cy))
-            task.wait(0.015)
-            VirtualUser:Button1Up(Vector2.new(cx, cy))
-        end)
-
-        -- 3. Global mouse1click / mouse1press
+        -- Method 3: Executor mouse1click / mouse1press
         if mouse1click then
             mouse1click()
         elseif mouse1press then
@@ -74,22 +80,43 @@ local function performM1Click()
             task.wait(0.015)
             mouse1release()
         end
+
+        -- Method 4: VirtualUser Click
+        pcall(function()
+            VirtualUser:CaptureController()
+            VirtualUser:Button1Down(Vector2.new(cx, cy))
+            task.wait(0.015)
+            VirtualUser:Button1Up(Vector2.new(cx, cy))
+        end)
     end)
 end
 
 -----------------------------------------------------------------------
--- Q-Key Dash Trigger (Dashing Engine)
+-- Guaranteed Q-Key Dash Trigger (InputBegan Hook + Virtual Key)
 -----------------------------------------------------------------------
 local function triggerDashQ()
     pcall(function()
-        -- Method 1: VirtualInputManager Q Key
+        -- Method 1: Fire UserInputService.InputBegan for Q Key
+        if getconnections then
+            for _, conn in ipairs(getconnections(UserInputService.InputBegan)) do
+                pcall(function()
+                    conn:Fire({
+                        UserInputType = Enum.UserInputType.Keyboard,
+                        UserInputState = Enum.UserInputState.Begin,
+                        KeyCode = Enum.KeyCode.Q
+                    }, false)
+                end)
+            end
+        end
+
+        -- Method 2: VirtualInputManager Q Key
         pcall(function()
             VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
             task.wait(0.03)
             VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
         end)
 
-        -- Method 2: Executor keypress 0x51 ('Q')
+        -- Method 3: Executor keypress 0x51 ('Q')
         if keypress then
             pcall(function()
                 keypress(0x51)
@@ -101,7 +128,7 @@ local function triggerDashQ()
 end
 
 -----------------------------------------------------------------------
--- Skill Activator (Keys 1, 2, 3, 4)
+-- Guaranteed Skill Activator (Keys 1, 2, 3, 4)
 -----------------------------------------------------------------------
 local function triggerSkill(skillNum)
     pcall(function()
@@ -111,6 +138,20 @@ local function triggerSkill(skillNum)
         local keyCodes = {Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.Three, Enum.KeyCode.Four}
         local hexCodes = {0x31, 0x32, 0x33, 0x34}
 
+        -- Fire InputBegan Hook for Skill Key
+        if getconnections and keyCodes[skillNum] then
+            for _, conn in ipairs(getconnections(UserInputService.InputBegan)) do
+                pcall(function()
+                    conn:Fire({
+                        UserInputType = Enum.UserInputType.Keyboard,
+                        UserInputState = Enum.UserInputState.Begin,
+                        KeyCode = keyCodes[skillNum]
+                    }, false)
+                end)
+            end
+        end
+
+        -- VirtualInputManager Key
         if keyCodes[skillNum] then
             pcall(function()
                 VirtualInputManager:SendKeyEvent(true, keyCodes[skillNum], false, game)
@@ -119,6 +160,7 @@ local function triggerSkill(skillNum)
             end)
         end
 
+        -- keypress / keyrelease
         if keypress and hexCodes[skillNum] then
             pcall(function()
                 keypress(hexCodes[skillNum])
@@ -232,7 +274,6 @@ task.spawn(function()
                     end
 
                     if isCountering then
-                        -- Execute Q Dash Backwards
                         triggerDashQ()
                         root.CFrame = root.CFrame * CFrame.new(0, 6, 25)
                         task.wait(0.2)
@@ -243,7 +284,7 @@ task.spawn(function()
                         -- STEP 1: Execute 4 Consecutive M1 Punches!
                         for m1Count = 1, 4 do
                             performM1Click()
-                            task.wait(0.18) -- Standard M1 swing timing
+                            task.wait(0.18)
                         end
 
                         -- STEP 2: Execute Q Dash towards / around target!
@@ -300,7 +341,7 @@ UICorner.Parent = MainFrame
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, 0, 0, 40)
 TitleLabel.BackgroundColor3 = Color3.fromRGB(35, 20, 25)
-TitleLabel.Text = "🥊 TSB M1 PUNCH & Q-DASH v9.1"
+TitleLabel.Text = "🥊 TSB INPUTBEGAN HOOK ENGINE v10.0"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleLabel.Font = Enum.Font.SourceSansBold
 TitleLabel.TextSize = 14
@@ -314,7 +355,7 @@ local AutoCombatBtn = Instance.new("TextButton")
 AutoCombatBtn.Size = UDim2.new(1, -24, 0, 44)
 AutoCombatBtn.Position = UDim2.new(0, 12, 0, 54)
 AutoCombatBtn.BackgroundColor3 = Color3.fromRGB(46, 184, 92)
-AutoCombatBtn.Text = "⚡ M1 PUNCH & Q-DASH ENGINE: ВКЛЮЧЕН"
+AutoCombatBtn.Text = "⚡ INPUTBEGAN HOOK & Q-DASH: ВКЛЮЧЕН"
 AutoCombatBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 AutoCombatBtn.Font = Enum.Font.SourceSansBold
 AutoCombatBtn.TextSize = 12
@@ -327,13 +368,13 @@ BtnCorner.Parent = AutoCombatBtn
 AutoCombatBtn.MouseButton1Click:Connect(function()
     _G.TSB_AutoCombat = not _G.TSB_AutoCombat
     if _G.TSB_AutoCombat then
-        AutoCombatBtn.Text = "⚡ M1 PUNCH & Q-DASH ENGINE: ВКЛЮЧЕН"
+        AutoCombatBtn.Text = "⚡ INPUTBEGAN HOOK & Q-DASH: ВКЛЮЧЕН"
         AutoCombatBtn.BackgroundColor3 = Color3.fromRGB(46, 184, 92)
     else
-        AutoCombatBtn.Text = "⚡ M1 PUNCH & Q-DASH ENGINE: ВЫКЛЮЧЕН"
+        AutoCombatBtn.Text = "⚡ INPUTBEGAN HOOK & Q-DASH: ВЫКЛЮЧЕН"
         AutoCombatBtn.BackgroundColor3 = Color3.fromRGB(220, 53, 69)
     end
 end)
 
-notify("TSB Pro Combat", "🥊 M1 PUNCH & Q-DASH v9.1 УСПЕШНО ЗАПУЩЕН!")
-print("[+] TSB Pro Combat Engine v9.1 Loaded.")
+notify("TSB Pro Combat", "🥊 INPUTBEGAN HOOK v10.0 УСПЕШНО ЗАПУЩЕН!")
+print("[+] TSB Pro Combat Engine v10.0 Loaded.")
