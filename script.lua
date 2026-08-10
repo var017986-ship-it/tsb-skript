@@ -1,11 +1,12 @@
 -- ====================================================================
--- The Strongest Battlegrounds (TSB) M1 Click Frame-Hold Fix v12.0
+-- The Strongest Battlegrounds (TSB) Fling Engine & Pro Combat Hub v13.0
 -- File: script.lua
 -- Repository: https://github.com/var017986-ship-it/tsb-skript
--- Features: 1. Frame-Synchronized M1 Mouse Click (0.035s Hold Time for 60FPS Frame Registration)
---           2. InputBegan & InputEnded Dual-State Event Hook
---           3. Instant Burst Skill Rotation (1-2-3-4)
---           4. Auto-Awakening & 25-stud Anti-Counter Evade
+-- Features: 1. Target Fling Physics Engine (Spin Impulse Collision)
+--           2. Frame-Synchronized M1 Mouse Click (0.035s Hold Time)
+--           3. InputBegan & InputEnded Dual-State Event Hooks
+--           4. Instant Burst Skill Rotation (1-2-3-4) + Q-Dash
+--           5. Auto-Awakening & 25-stud Anti-Counter Evade
 -- ====================================================================
 
 local Players = game:GetService("Players")
@@ -21,8 +22,8 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 local LocalPlayer = Players.LocalPlayer
 
 _G.TSB_AutoCombat = true
+_G.TSB_AutoFling = true
 _G.TSB_SprintSpeed = 75
-_G.TSB_AutoAwakening = true
 
 local currentTarget = nil
 
@@ -42,6 +43,36 @@ pcall(function()
         VirtualUser:ClickButton2(Vector2.new(0, 0))
     end)
 end)
+
+-----------------------------------------------------------------------
+-- High-Speed Fling Physics Engine
+-----------------------------------------------------------------------
+local function flingTarget(targetChar)
+    if not targetChar then return end
+    pcall(function()
+        local char = LocalPlayer.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        local targetRoot = targetChar:FindFirstChild("HumanoidRootPart")
+        if not root or not targetRoot then return end
+
+        local bav = Instance.new("BodyAngularVelocity")
+        bav.Name = "TSBFlingForce"
+        bav.AngularVelocity = Vector3.new(0, 999999, 0)
+        bav.MaxTorque = Vector3.new(0, math.huge, 0)
+        bav.P = math.huge
+        bav.Parent = root
+
+        local startTime = tick()
+        while tick() - startTime < 0.4 do
+            if not targetRoot or not root then break end
+            root.CFrame = targetRoot.CFrame * CFrame.new(0, 0, 0)
+            root.Velocity = Vector3.new(99999, 99999, 99999)
+            task.wait()
+        end
+
+        pcall(function() bav:Destroy() end)
+    end)
+end
 
 -----------------------------------------------------------------------
 -- Frame-Synchronized M1 Mouse Punch Trigger (0.035s Hold Time)
@@ -128,21 +159,6 @@ local function triggerDashQ()
         end)
 
         if keypress then keypress(0x51) task.wait(0.035) keyrelease(0x51) end
-    end)
-end
-
------------------------------------------------------------------------
--- G-Key Awakening Ultimate Trigger
------------------------------------------------------------------------
-local function triggerAwakeningG()
-    pcall(function()
-        pcall(function()
-            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.G, false, game)
-            task.wait(0.035)
-            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.G, false, game)
-        end)
-
-        if keypress then keypress(0x47) task.wait(0.035) keyrelease(0x47) end
     end)
 end
 
@@ -255,7 +271,7 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -----------------------------------------------------------------------
--- Subsystem: Pro Combat Loop (M1 Combo + Q Dash + Skills)
+-- Subsystem: Pro Combat & Fling Loop
 -----------------------------------------------------------------------
 task.spawn(function()
     local skillCycle = {1, 2, 3, 4}
@@ -294,22 +310,27 @@ task.spawn(function()
                     end
 
                     if dist <= 14 then
-                        -- STEP 1: Execute 4 M1 Punches with 0.035s Frame-Hold
+                        -- STEP 1: Execute Auto-Fling if enabled
+                        if _G.TSB_AutoFling and math.random(1, 3) == 1 then
+                            flingTarget(currentTarget)
+                        end
+
+                        -- STEP 2: Execute 4 M1 Punches
                         for i = 1, 4 do
                             performM1Click()
                             task.wait(0.18)
                         end
 
-                        -- STEP 2: Execute 1 Skill after M1 Combo
+                        -- STEP 3: Execute 1 Skill after M1 Combo
                         triggerSkill(skillCycle[skillIdx])
                         skillIdx = (skillIdx % #skillCycle) + 1
                         task.wait(0.2)
 
-                        -- STEP 3: Q-Dash Reset
+                        -- STEP 4: Q-Dash Reset
                         triggerDashQ()
                         task.wait(0.05)
 
-                        -- STEP 4: Snap to Enemy's Back
+                        -- STEP 5: Snap to Enemy's Back
                         local backPos = targetRoot.CFrame * CFrame.new(0, 0, 3.0)
                         root.CFrame = CFrame.new(backPos.Position, targetRoot.Position)
                     end
@@ -339,7 +360,7 @@ end
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 340, 0, 160)
+MainFrame.Size = UDim2.new(0, 340, 0, 200)
 MainFrame.Position = UDim2.new(0.5, -170, 0.25, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(15, 17, 24)
 MainFrame.BorderSizePixel = 0
@@ -354,7 +375,7 @@ UICorner.Parent = MainFrame
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, 0, 0, 40)
 TitleLabel.BackgroundColor3 = Color3.fromRGB(35, 20, 25)
-TitleLabel.Text = "🥊 TSB M1 FRAME-HOLD CLICK FIX v12.0"
+TitleLabel.Text = "🌀 TSB FLING ENGINE & COMBAT v13.0"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleLabel.Font = Enum.Font.SourceSansBold
 TitleLabel.TextSize = 13
@@ -366,9 +387,9 @@ TitleCorner.Parent = TitleLabel
 
 local AutoCombatBtn = Instance.new("TextButton")
 AutoCombatBtn.Size = UDim2.new(1, -24, 0, 44)
-AutoCombatBtn.Position = UDim2.new(0, 12, 0, 54)
+AutoCombatBtn.Position = UDim2.new(0, 12, 0, 52)
 AutoCombatBtn.BackgroundColor3 = Color3.fromRGB(46, 184, 92)
-AutoCombatBtn.Text = "⚡ FRAME-HOLD M1 CLICK: ВКЛЮЧЕН"
+AutoCombatBtn.Text = "⚡ AUTO COMBAT & SKILLS: ВКЛЮЧЕН"
 AutoCombatBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 AutoCombatBtn.Font = Enum.Font.SourceSansBold
 AutoCombatBtn.TextSize = 12
@@ -378,16 +399,41 @@ local BtnCorner = Instance.new("UICorner")
 BtnCorner.CornerRadius = UDim.new(0, 8)
 BtnCorner.Parent = AutoCombatBtn
 
+local AutoFlingBtn = Instance.new("TextButton")
+AutoFlingBtn.Size = UDim2.new(1, -24, 0, 44)
+AutoFlingBtn.Position = UDim2.new(0, 12, 0, 104)
+AutoFlingBtn.BackgroundColor3 = Color3.fromRGB(46, 184, 92)
+AutoFlingBtn.Text = "🌀 AUTO FLING TARGET: ВКЛЮЧЕН"
+AutoFlingBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+AutoFlingBtn.Font = Enum.Font.SourceSansBold
+AutoFlingBtn.TextSize = 12
+AutoFlingBtn.Parent = MainFrame
+
+local FlingCorner = Instance.new("UICorner")
+FlingCorner.CornerRadius = UDim.new(0, 8)
+FlingCorner.Parent = AutoFlingBtn
+
 AutoCombatBtn.MouseButton1Click:Connect(function()
     _G.TSB_AutoCombat = not _G.TSB_AutoCombat
     if _G.TSB_AutoCombat then
-        AutoCombatBtn.Text = "⚡ FRAME-HOLD M1 CLICK: ВКЛЮЧЕН"
+        AutoCombatBtn.Text = "⚡ AUTO COMBAT & SKILLS: ВКЛЮЧЕН"
         AutoCombatBtn.BackgroundColor3 = Color3.fromRGB(46, 184, 92)
     else
-        AutoCombatBtn.Text = "⚡ FRAME-HOLD M1 CLICK: ВЫКЛЮЧЕН"
+        AutoCombatBtn.Text = "⚡ AUTO COMBAT & SKILLS: ВЫКЛЮЧЕН"
         AutoCombatBtn.BackgroundColor3 = Color3.fromRGB(220, 53, 69)
     end
 end)
 
-notify("TSB Pro Combat", "🥊 M1 FRAME-HOLD CLICK v12.0 УСПЕШНО ЗАПУЩЕН!")
-print("[+] TSB Pro Combat Engine v12.0 Loaded.")
+AutoFlingBtn.MouseButton1Click:Connect(function()
+    _G.TSB_AutoFling = not _G.TSB_AutoFling
+    if _G.TSB_AutoFling then
+        AutoFlingBtn.Text = "🌀 AUTO FLING TARGET: ВКЛЮЧЕН"
+        AutoFlingBtn.BackgroundColor3 = Color3.fromRGB(46, 184, 92)
+    else
+        AutoFlingBtn.Text = "🌀 AUTO FLING TARGET: ВЫКЛЮЧЕН"
+        AutoFlingBtn.BackgroundColor3 = Color3.fromRGB(220, 53, 69)
+    end
+end)
+
+notify("TSB Pro Combat", "🌀 FLING ENGINE v13.0 УСПЕШНО ЗАПУЩЕН!")
+print("[+] TSB Pro Combat Engine v13.0 Loaded.")
