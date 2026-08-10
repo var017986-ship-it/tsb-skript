@@ -1,11 +1,11 @@
 -- ====================================================================
--- The Strongest Battlegrounds (TSB) Fast Sprint & Combo Weaver v3.0
+-- The Strongest Battlegrounds (TSB) Tech Master Engine v4.0
 -- File: script.lua
 -- Repository: https://github.com/var017986-ship-it/tsb-skript
--- Features: 1. Fast Sprint Chase Engine (Humanoid.WalkSpeed = 32 / CFrame Ground Glide)
---           2. Direct Remote Attack & Skill Activator (M1 + Skills 1,2,3,4)
---           3. Instant Counter Parry / Auto Block
---           4. TSB Master Hub GUI
+-- Features: 1. Uppercut Aerial Tech (M1 + Space Jump Uppercut Combo)
+--           2. Backdash Behind-Spin (Quick Q-Dash / CFrame Snap Behind Enemy)
+--           3. Instant Auto-Aim Lock & Camera Tracking
+--           4. Skill Weaver (Skills 1, 2, 3, 4)
 -- ====================================================================
 
 local Players = game:GetService("Players")
@@ -19,8 +19,8 @@ local CoreGui = game:GetService("CoreGui")
 local LocalPlayer = Players.LocalPlayer
 
 _G.TSB_AutoCombat = true
-_G.TSB_AutoBlock = true
-_G.TSB_SprintSpeed = 28
+_G.TSB_SprintSpeed = 30
+_G.TSB_TechEnabled = true
 
 local currentTarget = nil
 
@@ -45,23 +45,44 @@ pcall(function()
 end)
 
 -----------------------------------------------------------------------
--- Helper: Trigger Attack & Skills via Direct Character Remote Evokes
+-- Helper: Combat Triggers & Tech Techniques
 -----------------------------------------------------------------------
-local function attackTarget()
+local function attackM1()
     pcall(function()
-        local char = LocalPlayer.Character
-        if not char then return end
-
-        -- 1. Try VirtualUser Click
         VirtualUser:CaptureController()
         VirtualUser:Button1Down(Vector2.new(0, 0))
         task.wait(0.02)
         VirtualUser:Button1Up(Vector2.new(0, 0))
+    end)
+end
 
-        -- 2. Trigger TSB Character Combat Remotes / Modules if available
-        local comms = char:FindFirstChild("CommF_") or ReplicatedStorage:FindFirstChild("Remotes")
-        if comms then
-            pcall(function() comms:InvokeServer("Attack", "M1") end)
+-- Tech 1: Uppercut Tech (Jump + M1 Strike)
+local function executeUppercutTech()
+    pcall(function()
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if hum and root then
+            -- Jump into air for Uppercut
+            hum.Jump = true
+            task.wait(0.05)
+            attackM1()
+            task.wait(0.05)
+            attackM1()
+        end
+    end)
+end
+
+-- Tech 2: Backdash Behind Spin (Snap behind enemy's back)
+local function executeBackdashBehindTech(targetRoot)
+    pcall(function()
+        local char = LocalPlayer.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if root and targetRoot then
+            -- Calculate Position Exactly Behind Target's Back (3.5 studs behind)
+            local backPos = targetRoot.CFrame * CFrame.new(0, 0, 3.5)
+            -- Instantly face target's back
+            root.CFrame = CFrame.new(backPos.Position, targetRoot.Position)
         end
     end)
 end
@@ -71,7 +92,6 @@ local function executeSkill(skillNum)
         local char = LocalPlayer.Character
         if not char then return end
         
-        -- Activate Skill Tool from Character or Backpack
         local toolName = "Skill" .. skillNum
         local tool = char:FindFirstChild(toolName) or (LocalPlayer:FindFirstChild("Backpack") and LocalPlayer.Backpack:FindFirstChild(toolName))
         
@@ -82,8 +102,7 @@ local function executeSkill(skillNum)
             end
             tool:Activate()
         end
-        
-        -- Fire Remotes if tool direct activation is protected
+
         local comms = char:FindFirstChild("CommF_") or ReplicatedStorage:FindFirstChild("Remotes")
         if comms then
             pcall(function() comms:InvokeServer("Skill", skillNum) end)
@@ -121,7 +140,7 @@ local function getBestTarget()
 end
 
 -----------------------------------------------------------------------
--- Subsystem: Fast Ground Sprint & Lock-On Movement
+-- Subsystem: Movement & Lock-On Aim Engine
 -----------------------------------------------------------------------
 RunService.RenderStepped:Connect(function()
     if not _G.TSB_AutoCombat then return end
@@ -132,7 +151,6 @@ RunService.RenderStepped:Connect(function()
         local hum = char and char:FindFirstChildOfClass("Humanoid")
         if not root or not hum or hum.Health <= 0 then return end
 
-        -- Set Fast Sprint Speed
         hum.WalkSpeed = _G.TSB_SprintSpeed
 
         if not currentTarget or not currentTarget:FindFirstChild("HumanoidRootPart") or currentTarget:FindFirstChildOfClass("Humanoid").Health <= 0 then
@@ -145,30 +163,28 @@ RunService.RenderStepped:Connect(function()
             local myPos = root.Position
             local dist = (targetPos - myPos).Magnitude
 
-            -- Camera Tracking
+            -- Precision Auto-Aim Camera Lock
             if Workspace.CurrentCamera then
                 Workspace.CurrentCamera.CFrame = CFrame.new(Workspace.CurrentCamera.CFrame.Position, targetPos + Vector3.new(0, 1.5, 0))
             end
 
-            -- Fast Ground Chase (Direct CFrame Glide + Humanoid MoveTo)
+            -- Chase Target
             if dist > 3.5 then
                 hum:MoveTo(targetPos)
-                -- Fast smooth ground glide
                 local dir = (targetPos - myPos).Unit
-                root.CFrame = CFrame.new(myPos + Vector3.new(dir.X * 0.4, 0, dir.Z * 0.4), Vector3.new(targetPos.X, myPos.Y, targetPos.Z))
-            else
-                root.CFrame = CFrame.new(myPos, Vector3.new(targetPos.X, myPos.Y, targetPos.Z))
+                root.CFrame = CFrame.new(myPos + Vector3.new(dir.X * 0.45, 0, dir.Z * 0.45), Vector3.new(targetPos.X, myPos.Y, targetPos.Z))
             end
         end
     end)
 end)
 
 -----------------------------------------------------------------------
--- Subsystem: Attack & Skill Weaver Loop
+-- Subsystem: Pro Tech Combat Loop (Uppercut + Backdash Combo Chain)
 -----------------------------------------------------------------------
 task.spawn(function()
     local skillCycle = {1, 2, 3, 4}
     local skillIndex = 1
+    local comboStep = 0
 
     while task.wait(0.08) do
         if _G.TSB_AutoCombat and currentTarget and currentTarget:FindFirstChild("HumanoidRootPart") then
@@ -182,12 +198,26 @@ task.spawn(function()
                 if root and targetRoot and hum and hum.Health > 0 and targetHum and targetHum.Health > 0 then
                     local dist = (targetRoot.Position - root.Position).Magnitude
 
-                    if dist <= 10 then
-                        -- Fast M1 Attacks
-                        attackTarget()
-                        
-                        -- Weave Skills 1-4
-                        if math.random(1, 3) == 1 then
+                    if dist <= 11 then
+                        comboStep = comboStep + 1
+
+                        -- 1. Standard M1 Strike
+                        attackM1()
+
+                        -- 2. Every 3 M1s -> Execute Uppercut Tech
+                        if comboStep % 3 == 0 then
+                            executeUppercutTech()
+                            task.wait(0.1)
+                        end
+
+                        -- 3. Execute Backdash Behind-Spin Tech
+                        if comboStep % 5 == 0 then
+                            executeBackdashBehindTech(targetRoot)
+                            task.wait(0.1)
+                        end
+
+                        -- 4. Cast Skill 1-4
+                        if comboStep % 4 == 0 then
                             executeSkill(skillCycle[skillIndex])
                             skillIndex = (skillIndex % #skillCycle) + 1
                         end
@@ -199,7 +229,7 @@ task.spawn(function()
 end)
 
 -----------------------------------------------------------------------
--- Progress Dashboard GUI (TSB Master Hub v3.0)
+-- Progress Dashboard GUI (TSB Master Hub v4.0)
 -----------------------------------------------------------------------
 if CoreGui:FindFirstChild("TSBMasterHub") then
     CoreGui.TSBMasterHub:Destroy()
@@ -235,10 +265,10 @@ UICorner.Parent = MainFrame
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, 0, 0, 40)
 TitleLabel.BackgroundColor3 = Color3.fromRGB(35, 20, 25)
-TitleLabel.Text = "🥊 TSB FAST COMBAT & SKILLS v3.0"
+TitleLabel.Text = "🥊 TSB TECH MASTER v4.0 (UPPERCUT/BACKDASH)"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleLabel.Font = Enum.Font.SourceSansBold
-TitleLabel.TextSize = 15
+TitleLabel.TextSize = 13
 TitleLabel.Parent = MainFrame
 
 local TitleCorner = Instance.new("UICorner")
@@ -249,7 +279,7 @@ local AutoCombatBtn = Instance.new("TextButton")
 AutoCombatBtn.Size = UDim2.new(1, -24, 0, 44)
 AutoCombatBtn.Position = UDim2.new(0, 12, 0, 54)
 AutoCombatBtn.BackgroundColor3 = Color3.fromRGB(46, 184, 92)
-AutoCombatBtn.Text = "⚡ FAST AUTO COMBAT & SKILLS: ВКЛЮЧЕН"
+AutoCombatBtn.Text = "⚡ UPPERCUT & BACKDASH TECH: ВКЛЮЧЕН"
 AutoCombatBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 AutoCombatBtn.Font = Enum.Font.SourceSansBold
 AutoCombatBtn.TextSize = 13
@@ -262,13 +292,13 @@ BtnCorner.Parent = AutoCombatBtn
 AutoCombatBtn.MouseButton1Click:Connect(function()
     _G.TSB_AutoCombat = not _G.TSB_AutoCombat
     if _G.TSB_AutoCombat then
-        AutoCombatBtn.Text = "⚡ FAST AUTO COMBAT & SKILLS: ВКЛЮЧЕН"
+        AutoCombatBtn.Text = "⚡ UPPERCUT & BACKDASH TECH: ВКЛЮЧЕН"
         AutoCombatBtn.BackgroundColor3 = Color3.fromRGB(46, 184, 92)
     else
-        AutoCombatBtn.Text = "⚡ FAST AUTO COMBAT & SKILLS: ВЫКЛЮЧЕН"
+        AutoCombatBtn.Text = "⚡ UPPERCUT & BACKDASH TECH: ВЫКЛЮЧЕН"
         AutoCombatBtn.BackgroundColor3 = Color3.fromRGB(220, 53, 69)
     end
 end)
 
-notify("TSB Pro Combat", "⚡ БЫСТРЫЙ БОЙ И СКИЛЛЫ АКТИВИРОВАНЫ!")
-print("[+] TSB Fast Combat & Skill Weaver v3.0 Loaded.")
+notify("TSB Tech Master", "🥊 UPPERCUT & BACKDASH TECH АКТИВИРОВАНЫ!")
+print("[+] TSB Tech Master Engine v4.0 Loaded.")
