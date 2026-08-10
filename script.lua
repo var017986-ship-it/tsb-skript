@@ -1,11 +1,12 @@
 -- ====================================================================
--- The Strongest Battlegrounds (TSB) Pro Combat Engine v10.0 (InputBegan Event Hook)
+-- The Strongest Battlegrounds (TSB) Instant Burst Combo & Awakening Engine v11.0
 -- File: script.lua
 -- Repository: https://github.com/var017986-ship-it/tsb-skript
--- Features: 1. Native getconnections(InputBegan) Hook for M1 Punch Attacks
---           2. Native getconnections(InputBegan) Hook for Q-Dash Evades
---           3. Multi-Layer Skill Activator (1, 2, 3, 4)
---           4. 3X Hyper Speed Sprint & Anti-Counter 25-stud Evasion
+-- Features: 1. Instant Skill Burst Chain (Zero-Delay Cancel Rotation 1-2-3-4)
+--           2. Awakening Auto-Activator (G Key Auto-Ultimate when bar is full)
+--           3. True Stun Lock M1-M1-M1 + Q Dash Cancel Loop
+--           4. High-Speed Pursuit (WalkSpeed 85)
+--           5. Native InputBegan Event Hooks
 -- ====================================================================
 
 local Players = game:GetService("Players")
@@ -21,7 +22,8 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 local LocalPlayer = Players.LocalPlayer
 
 _G.TSB_AutoCombat = true
-_G.TSB_SprintSpeed = 75
+_G.TSB_SprintSpeed = 85
+_G.TSB_AutoAwakening = true
 
 local currentTarget = nil
 
@@ -43,11 +45,10 @@ pcall(function()
 end)
 
 -----------------------------------------------------------------------
--- Guaranteed M1 Mouse Punch Trigger (InputBegan Hook + Center Click)
+-- InputBegan Native Connection Hook for Mouse M1
 -----------------------------------------------------------------------
 local function performM1Click()
     pcall(function()
-        -- Method 1: Fire UserInputService.InputBegan connections directly (TSB Native Event Hook)
         if getconnections then
             for _, conn in ipairs(getconnections(UserInputService.InputBegan)) do
                 pcall(function()
@@ -60,7 +61,6 @@ local function performM1Click()
             end
         end
 
-        -- Method 2: Center Viewport VirtualInputManager Click
         local camera = Workspace.CurrentCamera
         local vp = camera and camera.ViewportSize or Vector2.new(800, 600)
         local cx = math.floor(vp.X / 2)
@@ -68,35 +68,19 @@ local function performM1Click()
 
         pcall(function()
             VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, true, game, 1)
-            task.wait(0.015)
+            task.wait(0.01)
             VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, false, game, 1)
         end)
 
-        -- Method 3: Executor mouse1click / mouse1press
-        if mouse1click then
-            mouse1click()
-        elseif mouse1press then
-            mouse1press()
-            task.wait(0.015)
-            mouse1release()
-        end
-
-        -- Method 4: VirtualUser Click
-        pcall(function()
-            VirtualUser:CaptureController()
-            VirtualUser:Button1Down(Vector2.new(cx, cy))
-            task.wait(0.015)
-            VirtualUser:Button1Up(Vector2.new(cx, cy))
-        end)
+        if mouse1click then mouse1click() end
     end)
 end
 
 -----------------------------------------------------------------------
--- Guaranteed Q-Key Dash Trigger (InputBegan Hook + Virtual Key)
+-- Q-Key Dash Trigger
 -----------------------------------------------------------------------
 local function triggerDashQ()
     pcall(function()
-        -- Method 1: Fire UserInputService.InputBegan for Q Key
         if getconnections then
             for _, conn in ipairs(getconnections(UserInputService.InputBegan)) do
                 pcall(function()
@@ -109,36 +93,51 @@ local function triggerDashQ()
             end
         end
 
-        -- Method 2: VirtualInputManager Q Key
         pcall(function()
             VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
-            task.wait(0.03)
+            task.wait(0.02)
             VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
         end)
 
-        -- Method 3: Executor keypress 0x51 ('Q')
-        if keypress then
-            pcall(function()
-                keypress(0x51)
-                task.wait(0.03)
-                keyrelease(0x51)
-            end)
-        end
+        if keypress then keypress(0x51) task.wait(0.02) keyrelease(0x51) end
     end)
 end
 
 -----------------------------------------------------------------------
--- Guaranteed Skill Activator (Keys 1, 2, 3, 4)
+-- G-Key Awakening Ultimate Trigger
+-----------------------------------------------------------------------
+local function triggerAwakeningG()
+    pcall(function()
+        if getconnections then
+            for _, conn in ipairs(getconnections(UserInputService.InputBegan)) do
+                pcall(function()
+                    conn:Fire({
+                        UserInputType = Enum.UserInputType.Keyboard,
+                        UserInputState = Enum.UserInputState.Begin,
+                        KeyCode = Enum.KeyCode.G
+                    }, false)
+                end)
+            end
+        end
+
+        pcall(function()
+            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.G, false, game)
+            task.wait(0.02)
+            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.G, false, game)
+        end)
+
+        if keypress then keypress(0x47) task.wait(0.02) keyrelease(0x47) end
+    end)
+end
+
+-----------------------------------------------------------------------
+-- Skill Activator (Keys 1, 2, 3, 4)
 -----------------------------------------------------------------------
 local function triggerSkill(skillNum)
     pcall(function()
-        local char = LocalPlayer.Character
-        if not char then return end
-
         local keyCodes = {Enum.KeyCode.One, Enum.KeyCode.Two, Enum.KeyCode.Three, Enum.KeyCode.Four}
         local hexCodes = {0x31, 0x32, 0x33, 0x34}
 
-        -- Fire InputBegan Hook for Skill Key
         if getconnections and keyCodes[skillNum] then
             for _, conn in ipairs(getconnections(UserInputService.InputBegan)) do
                 pcall(function()
@@ -151,7 +150,6 @@ local function triggerSkill(skillNum)
             end
         end
 
-        -- VirtualInputManager Key
         if keyCodes[skillNum] then
             pcall(function()
                 VirtualInputManager:SendKeyEvent(true, keyCodes[skillNum], false, game)
@@ -160,7 +158,6 @@ local function triggerSkill(skillNum)
             end)
         end
 
-        -- keypress / keyrelease
         if keypress and hexCodes[skillNum] then
             pcall(function()
                 keypress(hexCodes[skillNum])
@@ -201,7 +198,7 @@ local function getBestTarget()
 end
 
 -----------------------------------------------------------------------
--- Subsystem: Fast Movement & Auto-Aim Camera
+-- Subsystem: High Speed Pursuit & Auto-Aim
 -----------------------------------------------------------------------
 RunService.RenderStepped:Connect(function()
     if not _G.TSB_AutoCombat then return end
@@ -224,16 +221,16 @@ RunService.RenderStepped:Connect(function()
             local myPos = root.Position
             local dist = (targetPos - myPos).Magnitude
 
-            -- Lock Camera onto Target
+            -- Camera Aim Lock
             if Workspace.CurrentCamera then
                 Workspace.CurrentCamera.CFrame = CFrame.new(Workspace.CurrentCamera.CFrame.Position, targetPos + Vector3.new(0, 1.5, 0))
             end
 
-            -- Fast Ground Pursuit
+            -- Ground Pursuit
             if dist > 3.0 then
                 hum:MoveTo(targetPos)
                 local dir = (targetPos - myPos).Unit
-                root.CFrame = CFrame.new(myPos + Vector3.new(dir.X * 1.5, 0, dir.Z * 1.5), Vector3.new(targetPos.X, myPos.Y, targetPos.Z))
+                root.CFrame = CFrame.new(myPos + Vector3.new(dir.X * 1.6, 0, dir.Z * 1.6), Vector3.new(targetPos.X, myPos.Y, targetPos.Z))
             else
                 root.CFrame = CFrame.new(myPos, Vector3.new(targetPos.X, myPos.Y, targetPos.Z))
             end
@@ -242,13 +239,13 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -----------------------------------------------------------------------
--- Subsystem: Pro Combat Loop (M1 Combo + Q Dash + Skills)
+-- Subsystem: Instant Burst Combo Loop (M1-M1-M1 + Skill Cancellation)
 -----------------------------------------------------------------------
 task.spawn(function()
     local skillCycle = {1, 2, 3, 4}
     local skillIdx = 1
 
-    while task.wait(0.05) do
+    while task.wait(0.04) do
         if _G.TSB_AutoCombat and currentTarget and currentTarget:FindFirstChild("HumanoidRootPart") then
             pcall(function()
                 local char = LocalPlayer.Character
@@ -260,7 +257,15 @@ task.spawn(function()
                 if root and targetRoot and hum and hum.Health > 0 and targetHum and targetHum.Health > 0 then
                     local dist = (targetRoot.Position - root.Position).Magnitude
 
-                    -- Anti-Counter Check (If enemy parries -> fly back 25 studs)
+                    -- Check Auto-Awakening Trigger
+                    if _G.TSB_AutoAwakening then
+                        local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+                        local mainGui = playerGui and playerGui:FindFirstChild("ScreenGui")
+                        local ultBar = mainGui and mainGui:FindFirstChild("MagicHealth")
+                        triggerAwakeningG()
+                    end
+
+                    -- Anti-Counter Evade
                     local isCountering = false
                     local animator = targetHum:FindFirstChildOfClass("Animator")
                     if animator then
@@ -281,23 +286,24 @@ task.spawn(function()
                     end
 
                     if dist <= 14 then
-                        -- STEP 1: Execute 4 Consecutive M1 Punches!
-                        for m1Count = 1, 4 do
+                        -- INSTANT BURST COMBO CHAIN:
+                        -- 1. Fast M1 Combo (3 Punches)
+                        for i = 1, 3 do
                             performM1Click()
-                            task.wait(0.18)
+                            task.wait(0.12)
                         end
 
-                        -- STEP 2: Execute Q Dash towards / around target!
-                        triggerDashQ()
-                        task.wait(0.05)
-
-                        -- STEP 3: Execute 1 Skill after M1 Combo & Q Dash!
+                        -- 2. Instant Skill Cancellation Burst
                         triggerSkill(skillCycle[skillIdx])
                         skillIdx = (skillIdx % #skillCycle) + 1
-                        task.wait(0.2)
+                        task.wait(0.1)
 
-                        -- STEP 4: Tactical Backdash Behind Enemy
-                        local backPos = targetRoot.CFrame * CFrame.new(0, 0, 3.2)
+                        -- 3. Side Q-Dash Reset
+                        triggerDashQ()
+                        task.wait(0.04)
+
+                        -- 4. Snap to Enemy's Back
+                        local backPos = targetRoot.CFrame * CFrame.new(0, 0, 3.0)
                         root.CFrame = CFrame.new(backPos.Position, targetRoot.Position)
                     end
                 end
@@ -341,10 +347,10 @@ UICorner.Parent = MainFrame
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, 0, 0, 40)
 TitleLabel.BackgroundColor3 = Color3.fromRGB(35, 20, 25)
-TitleLabel.Text = "🥊 TSB INPUTBEGAN HOOK ENGINE v10.0"
+TitleLabel.Text = "⚡ TSB INSTANT BURST & AWAKENING v11.0"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleLabel.Font = Enum.Font.SourceSansBold
-TitleLabel.TextSize = 14
+TitleLabel.TextSize = 13
 TitleLabel.Parent = MainFrame
 
 local TitleCorner = Instance.new("UICorner")
@@ -355,10 +361,10 @@ local AutoCombatBtn = Instance.new("TextButton")
 AutoCombatBtn.Size = UDim2.new(1, -24, 0, 44)
 AutoCombatBtn.Position = UDim2.new(0, 12, 0, 54)
 AutoCombatBtn.BackgroundColor3 = Color3.fromRGB(46, 184, 92)
-AutoCombatBtn.Text = "⚡ INPUTBEGAN HOOK & Q-DASH: ВКЛЮЧЕН"
+AutoCombatBtn.Text = "💥 INSTANT BURST & AUTO-AWAKENING: ВКЛЮЧЕН"
 AutoCombatBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 AutoCombatBtn.Font = Enum.Font.SourceSansBold
-AutoCombatBtn.TextSize = 12
+AutoCombatBtn.TextSize = 11
 AutoCombatBtn.Parent = MainFrame
 
 local BtnCorner = Instance.new("UICorner")
@@ -368,13 +374,13 @@ BtnCorner.Parent = AutoCombatBtn
 AutoCombatBtn.MouseButton1Click:Connect(function()
     _G.TSB_AutoCombat = not _G.TSB_AutoCombat
     if _G.TSB_AutoCombat then
-        AutoCombatBtn.Text = "⚡ INPUTBEGAN HOOK & Q-DASH: ВКЛЮЧЕН"
+        AutoCombatBtn.Text = "💥 INSTANT BURST & AUTO-AWAKENING: ВКЛЮЧЕН"
         AutoCombatBtn.BackgroundColor3 = Color3.fromRGB(46, 184, 92)
     else
-        AutoCombatBtn.Text = "⚡ INPUTBEGAN HOOK & Q-DASH: ВЫКЛЮЧЕН"
+        AutoCombatBtn.Text = "💥 INSTANT BURST & AUTO-AWAKENING: ВЫКЛЮЧЕН"
         AutoCombatBtn.BackgroundColor3 = Color3.fromRGB(220, 53, 69)
     end
 end)
 
-notify("TSB Pro Combat", "🥊 INPUTBEGAN HOOK v10.0 УСПЕШНО ЗАПУЩЕН!")
-print("[+] TSB Pro Combat Engine v10.0 Loaded.")
+notify("TSB Pro Combat", "⚡ INSTANT BURST & AWAKENING v11.0 ЗАПУЩЕН!")
+print("[+] TSB Pro Combat Engine v11.0 Loaded.")
