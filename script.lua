@@ -1,7 +1,11 @@
 -- ====================================================================
--- The Strongest Battlegrounds (TSB) Ultra-Compatible Combat Hub v2.1
+-- The Strongest Battlegrounds (TSB) Fast Sprint & Combo Weaver v3.0
 -- File: script.lua
 -- Repository: https://github.com/var017986-ship-it/tsb-skript
+-- Features: 1. Fast Sprint Chase Engine (Humanoid.WalkSpeed = 32 / CFrame Ground Glide)
+--           2. Direct Remote Attack & Skill Activator (M1 + Skills 1,2,3,4)
+--           3. Instant Counter Parry / Auto Block
+--           4. TSB Master Hub GUI
 -- ====================================================================
 
 local Players = game:GetService("Players")
@@ -16,6 +20,7 @@ local LocalPlayer = Players.LocalPlayer
 
 _G.TSB_AutoCombat = true
 _G.TSB_AutoBlock = true
+_G.TSB_SprintSpeed = 28
 
 local currentTarget = nil
 
@@ -29,6 +34,9 @@ local function notify(title, text)
     end)
 end
 
+-----------------------------------------------------------------------
+-- Subsystem: Safe Anti-AFK
+-----------------------------------------------------------------------
 pcall(function()
     LocalPlayer.Idled:Connect(function()
         VirtualUser:CaptureController()
@@ -36,6 +44,56 @@ pcall(function()
     end)
 end)
 
+-----------------------------------------------------------------------
+-- Helper: Trigger Attack & Skills via Direct Character Remote Evokes
+-----------------------------------------------------------------------
+local function attackTarget()
+    pcall(function()
+        local char = LocalPlayer.Character
+        if not char then return end
+
+        -- 1. Try VirtualUser Click
+        VirtualUser:CaptureController()
+        VirtualUser:Button1Down(Vector2.new(0, 0))
+        task.wait(0.02)
+        VirtualUser:Button1Up(Vector2.new(0, 0))
+
+        -- 2. Trigger TSB Character Combat Remotes / Modules if available
+        local comms = char:FindFirstChild("CommF_") or ReplicatedStorage:FindFirstChild("Remotes")
+        if comms then
+            pcall(function() comms:InvokeServer("Attack", "M1") end)
+        end
+    end)
+end
+
+local function executeSkill(skillNum)
+    pcall(function()
+        local char = LocalPlayer.Character
+        if not char then return end
+        
+        -- Activate Skill Tool from Character or Backpack
+        local toolName = "Skill" .. skillNum
+        local tool = char:FindFirstChild(toolName) or (LocalPlayer:FindFirstChild("Backpack") and LocalPlayer.Backpack:FindFirstChild(toolName))
+        
+        if tool then
+            if tool.Parent ~= char then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hum then hum:EquipTool(tool) end
+            end
+            tool:Activate()
+        end
+        
+        -- Fire Remotes if tool direct activation is protected
+        local comms = char:FindFirstChild("CommF_") or ReplicatedStorage:FindFirstChild("Remotes")
+        if comms then
+            pcall(function() comms:InvokeServer("Skill", skillNum) end)
+        end
+    end)
+end
+
+-----------------------------------------------------------------------
+-- Subsystem: Target Finder
+-----------------------------------------------------------------------
 local function getBestTarget()
     local char = LocalPlayer.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -62,6 +120,9 @@ local function getBestTarget()
     return closestEnemy
 end
 
+-----------------------------------------------------------------------
+-- Subsystem: Fast Ground Sprint & Lock-On Movement
+-----------------------------------------------------------------------
 RunService.RenderStepped:Connect(function()
     if not _G.TSB_AutoCombat then return end
 
@@ -70,6 +131,9 @@ RunService.RenderStepped:Connect(function()
         local root = char and char:FindFirstChild("HumanoidRootPart")
         local hum = char and char:FindFirstChildOfClass("Humanoid")
         if not root or not hum or hum.Health <= 0 then return end
+
+        -- Set Fast Sprint Speed
+        hum.WalkSpeed = _G.TSB_SprintSpeed
 
         if not currentTarget or not currentTarget:FindFirstChild("HumanoidRootPart") or currentTarget:FindFirstChildOfClass("Humanoid").Health <= 0 then
             currentTarget = getBestTarget()
@@ -81,12 +145,17 @@ RunService.RenderStepped:Connect(function()
             local myPos = root.Position
             local dist = (targetPos - myPos).Magnitude
 
+            -- Camera Tracking
             if Workspace.CurrentCamera then
                 Workspace.CurrentCamera.CFrame = CFrame.new(Workspace.CurrentCamera.CFrame.Position, targetPos + Vector3.new(0, 1.5, 0))
             end
 
-            if dist > 4.5 then
+            -- Fast Ground Chase (Direct CFrame Glide + Humanoid MoveTo)
+            if dist > 3.5 then
                 hum:MoveTo(targetPos)
+                -- Fast smooth ground glide
+                local dir = (targetPos - myPos).Unit
+                root.CFrame = CFrame.new(myPos + Vector3.new(dir.X * 0.4, 0, dir.Z * 0.4), Vector3.new(targetPos.X, myPos.Y, targetPos.Z))
             else
                 root.CFrame = CFrame.new(myPos, Vector3.new(targetPos.X, myPos.Y, targetPos.Z))
             end
@@ -94,8 +163,14 @@ RunService.RenderStepped:Connect(function()
     end)
 end)
 
+-----------------------------------------------------------------------
+-- Subsystem: Attack & Skill Weaver Loop
+-----------------------------------------------------------------------
 task.spawn(function()
-    while task.wait(0.15) do
+    local skillCycle = {1, 2, 3, 4}
+    local skillIndex = 1
+
+    while task.wait(0.08) do
         if _G.TSB_AutoCombat and currentTarget and currentTarget:FindFirstChild("HumanoidRootPart") then
             pcall(function()
                 local char = LocalPlayer.Character
@@ -107,12 +182,15 @@ task.spawn(function()
                 if root and targetRoot and hum and hum.Health > 0 and targetHum and targetHum.Health > 0 then
                     local dist = (targetRoot.Position - root.Position).Magnitude
 
-                    if dist <= 12 then
-                        -- Perform attack via VirtualUser Click
-                        VirtualUser:CaptureController()
-                        VirtualUser:Button1Down(Vector2.new(0,0))
-                        task.wait(0.05)
-                        VirtualUser:Button1Up(Vector2.new(0,0))
+                    if dist <= 10 then
+                        -- Fast M1 Attacks
+                        attackTarget()
+                        
+                        -- Weave Skills 1-4
+                        if math.random(1, 3) == 1 then
+                            executeSkill(skillCycle[skillIndex])
+                            skillIndex = (skillIndex % #skillCycle) + 1
+                        end
                     end
                 end
             end)
@@ -120,7 +198,9 @@ task.spawn(function()
     end
 end)
 
--- Dashboard UI
+-----------------------------------------------------------------------
+-- Progress Dashboard GUI (TSB Master Hub v3.0)
+-----------------------------------------------------------------------
 if CoreGui:FindFirstChild("TSBMasterHub") then
     CoreGui.TSBMasterHub:Destroy()
 end
@@ -155,10 +235,10 @@ UICorner.Parent = MainFrame
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, 0, 0, 40)
 TitleLabel.BackgroundColor3 = Color3.fromRGB(35, 20, 25)
-TitleLabel.Text = "🥊 TSB PRO COMBAT v2.1"
+TitleLabel.Text = "🥊 TSB FAST COMBAT & SKILLS v3.0"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleLabel.Font = Enum.Font.SourceSansBold
-TitleLabel.TextSize = 16
+TitleLabel.TextSize = 15
 TitleLabel.Parent = MainFrame
 
 local TitleCorner = Instance.new("UICorner")
@@ -169,10 +249,10 @@ local AutoCombatBtn = Instance.new("TextButton")
 AutoCombatBtn.Size = UDim2.new(1, -24, 0, 44)
 AutoCombatBtn.Position = UDim2.new(0, 12, 0, 54)
 AutoCombatBtn.BackgroundColor3 = Color3.fromRGB(46, 184, 92)
-AutoCombatBtn.Text = "⚔️ PRO AUTO COMBAT: ВКЛЮЧЕН"
+AutoCombatBtn.Text = "⚡ FAST AUTO COMBAT & SKILLS: ВКЛЮЧЕН"
 AutoCombatBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 AutoCombatBtn.Font = Enum.Font.SourceSansBold
-AutoCombatBtn.TextSize = 14
+AutoCombatBtn.TextSize = 13
 AutoCombatBtn.Parent = MainFrame
 
 local BtnCorner = Instance.new("UICorner")
@@ -182,12 +262,13 @@ BtnCorner.Parent = AutoCombatBtn
 AutoCombatBtn.MouseButton1Click:Connect(function()
     _G.TSB_AutoCombat = not _G.TSB_AutoCombat
     if _G.TSB_AutoCombat then
-        AutoCombatBtn.Text = "⚔️ PRO AUTO COMBAT: ВКЛЮЧЕН"
+        AutoCombatBtn.Text = "⚡ FAST AUTO COMBAT & SKILLS: ВКЛЮЧЕН"
         AutoCombatBtn.BackgroundColor3 = Color3.fromRGB(46, 184, 92)
     else
-        AutoCombatBtn.Text = "⚔️ PRO AUTO COMBAT: ВЫКЛЮЧЕН"
+        AutoCombatBtn.Text = "⚡ FAST AUTO COMBAT & SKILLS: ВЫКЛЮЧЕН"
         AutoCombatBtn.BackgroundColor3 = Color3.fromRGB(220, 53, 69)
     end
 end)
 
-notify("TSB Pro Combat", "⚔️ СКРИПТ УСПЕШНО ЗАПУЩЕН!")
+notify("TSB Pro Combat", "⚡ БЫСТРЫЙ БОЙ И СКИЛЛЫ АКТИВИРОВАНЫ!")
+print("[+] TSB Fast Combat & Skill Weaver v3.0 Loaded.")
