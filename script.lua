@@ -1,5 +1,5 @@
 -- ====================================================================
--- The Strongest Battlegrounds (TSB) Pro Combat Engine v7.0 (Guaranteed M1 & Skills)
+-- The Strongest Battlegrounds (TSB) Pro Combat Engine v8.0 (Center Viewport Click Fix)
 -- File: script.lua
 -- Repository: https://github.com/var017986-ship-it/tsb-skript
 -- ====================================================================
@@ -16,7 +16,7 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 local LocalPlayer = Players.LocalPlayer
 
 _G.TSB_AutoCombat = true
-_G.TSB_SprintSpeed = 75
+_G.TSB_SprintSpeed = 65
 
 local currentTarget = nil
 
@@ -38,11 +38,32 @@ pcall(function()
 end)
 
 -----------------------------------------------------------------------
--- Multi-Method Attack System (Guaranteed M1 Striking)
+-- Center-Screen Viewport M1 Attack Trigger (Fixes Top-Left Pixel Bug)
 -----------------------------------------------------------------------
 local function performM1Attack()
     pcall(function()
-        -- Method 1: Executor mouse1click / mouse1press
+        local camera = Workspace.CurrentCamera
+        local vp = camera and camera.ViewportSize or Vector2.new(800, 600)
+        local cx = math.floor(vp.X / 2)
+        local cy = math.floor(vp.Y / 2)
+
+        -- 1. Center Viewport VirtualInputManager Click
+        pcall(function()
+            VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, true, game, 0)
+            task.wait(0.01)
+            VirtualInputManager:SendMouseButtonEvent(cx, cy, 0, false, game, 0)
+        end)
+
+        -- 2. Center Viewport VirtualUser Click
+        pcall(function()
+            VirtualUser:CaptureController()
+            VirtualUser:Button1Down(Vector2.new(cx, cy))
+            task.wait(0.01)
+            VirtualUser:Button1Up(Vector2.new(cx, cy))
+            VirtualUser:ClickButton1(Vector2.new(cx, cy))
+        end)
+
+        -- 3. Executor Global mouse1click
         if mouse1click then
             mouse1click()
         elseif mouse1press then
@@ -50,22 +71,6 @@ local function performM1Attack()
             task.wait(0.01)
             mouse1release()
         end
-
-        -- Method 2: VirtualInputManager Click
-        pcall(function()
-            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-            task.wait(0.01)
-            VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-        end)
-
-        -- Method 3: VirtualUser Controller
-        pcall(function()
-            VirtualUser:CaptureController()
-            VirtualUser:Button1Down(Vector2.new(0, 0))
-            task.wait(0.01)
-            VirtualUser:Button1Up(Vector2.new(0, 0))
-            VirtualUser:ClickButton1(Vector2.new(0, 0))
-        end)
     end)
 end
 
@@ -180,7 +185,7 @@ RunService.RenderStepped:Connect(function()
             if dist > 3.0 then
                 hum:MoveTo(targetPos)
                 local dir = (targetPos - myPos).Unit
-                root.CFrame = CFrame.new(myPos + Vector3.new(dir.X * 1.5, 0, dir.Z * 1.5), Vector3.new(targetPos.X, myPos.Y, targetPos.Z))
+                root.CFrame = CFrame.new(myPos + Vector3.new(dir.X * 1.2, 0, dir.Z * 1.2), Vector3.new(targetPos.X, myPos.Y, targetPos.Z))
             else
                 root.CFrame = CFrame.new(myPos, Vector3.new(targetPos.X, myPos.Y, targetPos.Z))
             end
@@ -230,7 +235,7 @@ task.spawn(function()
                     if dist <= 14 then
                         stepCounter = stepCounter + 1
 
-                        -- 1. Guaranteed M1 Strike
+                        -- 1. Guaranteed M1 Strike (Center Screen Viewport Click)
                         performM1Attack()
 
                         -- 2. Trigger Skill 1, 2, 3, 4
@@ -294,7 +299,7 @@ UICorner.Parent = MainFrame
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, 0, 0, 40)
 TitleLabel.BackgroundColor3 = Color3.fromRGB(35, 20, 25)
-TitleLabel.Text = "🥊 TSB GUARANTEED M1 & SKILLS v7.0"
+TitleLabel.Text = "🥊 TSB CENTER VIEWPORT ATTACK v8.0"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleLabel.Font = Enum.Font.SourceSansBold
 TitleLabel.TextSize = 14
@@ -308,7 +313,7 @@ local AutoCombatBtn = Instance.new("TextButton")
 AutoCombatBtn.Size = UDim2.new(1, -24, 0, 44)
 AutoCombatBtn.Position = UDim2.new(0, 12, 0, 54)
 AutoCombatBtn.BackgroundColor3 = Color3.fromRGB(46, 184, 92)
-AutoCombatBtn.Text = "⚡ GUARANTEED COMBAT & SKILLS: ВКЛЮЧЕН"
+AutoCombatBtn.Text = "⚡ CENTER VIEWPORT ATTACK & SKILLS: ВКЛЮЧЕН"
 AutoCombatBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 AutoCombatBtn.Font = Enum.Font.SourceSansBold
 AutoCombatBtn.TextSize = 12
@@ -321,13 +326,13 @@ BtnCorner.Parent = AutoCombatBtn
 AutoCombatBtn.MouseButton1Click:Connect(function()
     _G.TSB_AutoCombat = not _G.TSB_AutoCombat
     if _G.TSB_AutoCombat then
-        AutoCombatBtn.Text = "⚡ GUARANTEED COMBAT & SKILLS: ВКЛЮЧЕН"
+        AutoCombatBtn.Text = "⚡ CENTER VIEWPORT ATTACK & SKILLS: ВКЛЮЧЕН"
         AutoCombatBtn.BackgroundColor3 = Color3.fromRGB(46, 184, 92)
     else
-        AutoCombatBtn.Text = "⚡ GUARANTEED COMBAT & SKILLS: ВЫКЛЮЧЕН"
+        AutoCombatBtn.Text = "⚡ CENTER VIEWPORT ATTACK & SKILLS: ВЫКЛЮЧЕН"
         AutoCombatBtn.BackgroundColor3 = Color3.fromRGB(220, 53, 69)
     end
 end)
 
-notify("TSB Pro Combat", "🥊 GUARANTEED M1 & SKILLS v7.0 УСПЕШНО ЗАПУЩЕН!")
-print("[+] TSB Pro Combat Engine v7.0 Loaded.")
+notify("TSB Pro Combat", "🥊 CENTER VIEWPORT ATTACK v8.0 ЗАПУЩЕН!")
+print("[+] TSB Pro Combat Engine v8.0 Loaded.")
