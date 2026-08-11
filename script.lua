@@ -1,10 +1,11 @@
 -- ====================================================================
--- The Strongest Battlegrounds (TSB) Ultimate Gojo & Fling Master Hub
+-- The Strongest Battlegrounds (TSB) Master Hub v15.0
 -- File: script.lua
--- Features: 1. Gojo VFX Overlay for Saitama Skills (1, 2, 3, 4)
---           2. Anti-Fling Physics Protection
---           3. Single Target Fling by Username
---           4. Fling All & Loop Fling All Engine
+-- Repository: https://github.com/var017986-ship-it/tsb-skript
+-- Features: 1. Saitama Gojo VFX Skills (1, 2, 3, 4)
+--           2. Garou (Hero Hunter) Void Trap Combo Teleport (Skills 1 & 2)
+--           3. Anti-Fling Protection Engine
+--           4. Single Target & Fling All Players Engine
 -- ====================================================================
 
 local Players = game:GetService("Players")
@@ -25,6 +26,7 @@ end)
 
 _G.TSB_AntiFling = true
 _G.TSB_LoopFling = false
+_G.TSB_GarouVoidTrap = false
 
 local function notify(title, text)
     pcall(function()
@@ -123,7 +125,69 @@ task.spawn(function()
 end)
 
 -----------------------------------------------------------------------
--- 3. Gojo Visual Effects Engine (Skills 1, 2, 3, 4)
+-- 3. Garou (Hero Hunter) Void Trap Engine (Skills 1 & 2)
+-----------------------------------------------------------------------
+local voidPlatform = nil
+local function getOrCreateVoidPlatform()
+    if voidPlatform and voidPlatform.Parent then
+        return voidPlatform
+    end
+    local plate = Instance.new("Part")
+    plate.Name = "TSB_GarouVoidPlatform"
+    plate.Size = Vector3.new(120, 6, 120)
+    plate.CFrame = CFrame.new(9999, 5000, 9999)
+    plate.Anchored = true
+    plate.CanCollide = true
+    plate.Color = Color3.fromRGB(25, 25, 35)
+    plate.Material = Enum.Material.SmoothPlastic
+    plate.Parent = workspace
+
+    local label = Instance.new("SelectionBox")
+    label.Color3 = Color3.fromRGB(160, 0, 255)
+    label.Adornee = plate
+    label.Parent = plate
+
+    voidPlatform = plate
+    return plate
+end
+
+local isTeleportingGarou = false
+local function executeGarouVoidTeleport()
+    if isTeleportingGarou then return end
+    isTeleportingGarou = true
+
+    task.spawn(function()
+        pcall(function()
+            local hrp = Character and Character:FindFirstChild("HumanoidRootPart")
+            if not hrp then isTeleportingGarou = false return end
+
+            local origCFrame = hrp.CFrame
+            getOrCreateVoidPlatform()
+
+            -- Brief delay to allow Garou grab/hitbox to attach to victim
+            task.wait(0.22)
+
+            -- Teleport Garou + Grabbed Target far outside the map onto void platform
+            if Character and Character:FindFirstChild("HumanoidRootPart") then
+                Character.HumanoidRootPart.CFrame = CFrame.new(9999, 5005, 9999)
+            end
+
+            -- Hold target out of bounds for combo duration
+            task.wait(1.8)
+
+            -- Teleport LocalPlayer back safely to ground, leaving target stranded
+            if Character and Character:FindFirstChild("HumanoidRootPart") then
+                Character.HumanoidRootPart.CFrame = origCFrame
+            end
+
+            notify("Garou Void Trap", "🌌 Цель выброшена за карту на платформу!")
+        end)
+        isTeleportingGarou = false
+    end)
+end
+
+-----------------------------------------------------------------------
+-- 4. Gojo Visual Effects Engine (Saitama Skills 1, 2, 3, 4)
 -----------------------------------------------------------------------
 local function spawnGojoVFX(skillIndex)
     if not Character or not Character:FindFirstChild("HumanoidRootPart") then return end
@@ -255,12 +319,20 @@ local function spawnGojoVFX(skillIndex)
     end
 end
 
+-- Key Input Dispatcher (Handles Gojo VFX & Garou Void Teleport)
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
+
     if input.KeyCode == Enum.KeyCode.One then
         spawnGojoVFX(1)
+        if _G.TSB_GarouVoidTrap then
+            executeGarouVoidTeleport()
+        end
     elseif input.KeyCode == Enum.KeyCode.Two then
         spawnGojoVFX(2)
+        if _G.TSB_GarouVoidTrap then
+            executeGarouVoidTeleport()
+        end
     elseif input.KeyCode == Enum.KeyCode.Three then
         spawnGojoVFX(3)
     elseif input.KeyCode == Enum.KeyCode.Four then
@@ -269,14 +341,14 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 -----------------------------------------------------------------------
--- 4. GUI Dashboard Interface
+-- 5. Modern Dashboard UI
 -----------------------------------------------------------------------
-if CoreGui:FindFirstChild("TSBGojoMasterHub") then
-    CoreGui.TSBGojoMasterHub:Destroy()
+if CoreGui:FindFirstChild("TSBMasterHub") then
+    CoreGui.TSBMasterHub:Destroy()
 end
 
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "TSBGojoMasterHub"
+ScreenGui.Name = "TSBMasterHub"
 ScreenGui.ResetOnSpawn = false
 
 if gethui then
@@ -290,8 +362,8 @@ end
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 310, 0, 320)
-MainFrame.Position = UDim2.new(0.05, 0, 0.25, 0)
+MainFrame.Size = UDim2.new(0, 310, 0, 360)
+MainFrame.Position = UDim2.new(0.05, 0, 0.22, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -305,19 +377,48 @@ UICorner.Parent = MainFrame
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, 0, 0, 42)
 TitleLabel.BackgroundColor3 = Color3.fromRGB(130, 0, 240)
-TitleLabel.Text = "🌀 TSB: GOJO & FLING MASTER HUB"
+TitleLabel.Text = "🌀 TSB MASTER HUB v15.0"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleLabel.Font = Enum.Font.SourceSansBold
-TitleLabel.TextSize = 13
+TitleLabel.TextSize = 14
 TitleLabel.Parent = MainFrame
 
 local TitleCorner = Instance.new("UICorner")
 TitleCorner.CornerRadius = UDim.new(0, 10)
 TitleCorner.Parent = TitleLabel
 
+-- Garou Void Trap Toggle Button
+local GarouBtn = Instance.new("TextButton")
+GarouBtn.Size = UDim2.new(1, -24, 0, 36)
+GarouBtn.Position = UDim2.new(0, 12, 0, 52)
+GarouBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
+GarouBtn.Text = "🐺 GARAOU VOID TRAP (1&2): ВЫКЛ"
+GarouBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+GarouBtn.Font = Enum.Font.SourceSansBold
+GarouBtn.TextSize = 12
+GarouBtn.Parent = MainFrame
+
+local GarouCorner = Instance.new("UICorner")
+GarouCorner.CornerRadius = UDim.new(0, 8)
+GarouCorner.Parent = GarouBtn
+
+GarouBtn.MouseButton1Click:Connect(function()
+    _G.TSB_GarouVoidTrap = not _G.TSB_GarouVoidTrap
+    if _G.TSB_GarouVoidTrap then
+        GarouBtn.Text = "🐺 GARAOU VOID TRAP (1&2): ВКЛ"
+        GarouBtn.BackgroundColor3 = Color3.fromRGB(160, 40, 240)
+        notify("Garou Mode", "🌌 Выброс за карту для скилов 1 и 2 ВКЛЮЧЕН!")
+    else
+        GarouBtn.Text = "🐺 GARAOU VOID TRAP (1&2): ВЫКЛ"
+        GarouBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
+        notify("Garou Mode", "❌ Выброс за карту ВЫКЛЮЧЕН!")
+    end
+end)
+
+-- Anti Fling Button
 local AntiFlingBtn = Instance.new("TextButton")
 AntiFlingBtn.Size = UDim2.new(1, -24, 0, 36)
-AntiFlingBtn.Position = UDim2.new(0, 12, 0, 52)
+AntiFlingBtn.Position = UDim2.new(0, 12, 0, 96)
 AntiFlingBtn.BackgroundColor3 = Color3.fromRGB(40, 170, 80)
 AntiFlingBtn.Text = "🛡️ ANTI-FLING: ВКЛЮЧЕН"
 AntiFlingBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -340,9 +441,10 @@ AntiFlingBtn.MouseButton1Click:Connect(function()
     end
 end)
 
+-- Target Input
 local TargetInput = Instance.new("TextBox")
 TargetInput.Size = UDim2.new(1, -24, 0, 36)
-TargetInput.Position = UDim2.new(0, 12, 0, 96)
+TargetInput.Position = UDim2.new(0, 12, 0, 140)
 TargetInput.PlaceholderText = "Введите ник игрока..."
 TargetInput.Text = ""
 TargetInput.BackgroundColor3 = Color3.fromRGB(35, 35, 48)
@@ -355,9 +457,10 @@ local InputCorner = Instance.new("UICorner")
 InputCorner.CornerRadius = UDim.new(0, 8)
 InputCorner.Parent = TargetInput
 
+-- Fling Target Button
 local FlingTargetBtn = Instance.new("TextButton")
 FlingTargetBtn.Size = UDim2.new(1, -24, 0, 36)
-FlingTargetBtn.Position = UDim2.new(0, 12, 0, 140)
+FlingTargetBtn.Position = UDim2.new(0, 12, 0, 184)
 FlingTargetBtn.BackgroundColor3 = Color3.fromRGB(210, 40, 60)
 FlingTargetBtn.Text = "🎯 ФЛИНГНУТЬ ЦЕЛЬ"
 FlingTargetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -381,9 +484,10 @@ FlingTargetBtn.MouseButton1Click:Connect(function()
     end
 end)
 
+-- Fling All Button
 local FlingAllBtn = Instance.new("TextButton")
 FlingAllBtn.Size = UDim2.new(1, -24, 0, 36)
-FlingAllBtn.Position = UDim2.new(0, 12, 0, 184)
+FlingAllBtn.Position = UDim2.new(0, 12, 0, 228)
 FlingAllBtn.BackgroundColor3 = Color3.fromRGB(190, 30, 90)
 FlingAllBtn.Text = "💥 ФЛИНГНУТЬ ВСЕХ (1 РАЗ)"
 FlingAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -399,9 +503,10 @@ FlingAllBtn.MouseButton1Click:Connect(function()
     task.spawn(flingAllPlayers)
 end)
 
+-- Loop Fling Button
 local LoopFlingBtn = Instance.new("TextButton")
 LoopFlingBtn.Size = UDim2.new(1, -24, 0, 36)
-LoopFlingBtn.Position = UDim2.new(0, 12, 0, 228)
+LoopFlingBtn.Position = UDim2.new(0, 12, 0, 272)
 LoopFlingBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
 LoopFlingBtn.Text = "⚡ АВТО-ФЛИНГ ВСЕХ: ВЫКЛ"
 LoopFlingBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -426,13 +531,13 @@ end)
 
 local InfoLabel = Instance.new("TextLabel")
 InfoLabel.Size = UDim2.new(1, -24, 0, 36)
-InfoLabel.Position = UDim2.new(0, 12, 0, 272)
+InfoLabel.Position = UDim2.new(0, 12, 0, 316)
 InfoLabel.BackgroundTransparency = 1
-InfoLabel.Text = "Gojo VFX Skills: 1 (Red), 2 (Blue), 3 (Purple), 4 (Domain)"
+InfoLabel.Text = "Gojo (Saitama 1-4) | Garou Void Trap (1 & 2)"
 InfoLabel.TextColor3 = Color3.fromRGB(170, 170, 200)
 InfoLabel.TextSize = 11
 InfoLabel.Font = Enum.Font.SourceSans
 InfoLabel.Parent = MainFrame
 
-notify("TSB Master Hub", "✅ Скрипт Годжо + Флинг успешно загружен!")
-print("[+] TSB Master Hub loaded successfully.")
+notify("TSB Master Hub v15.0", "✅ Загружен! Гароу Выброс + Годжо + Флинг")
+print("[+] TSB Master Hub v15.0 Loaded.")
