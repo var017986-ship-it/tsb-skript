@@ -1,11 +1,12 @@
 -- ====================================================================
--- The Strongest Battlegrounds (TSB) Master Hub v16.0 (FIXED & POWERFUL)
+-- The Strongest Battlegrounds (TSB) Master Hub v17.0 (ULTIMATE UPDATE)
 -- File: script.lua
 -- Repository: https://github.com/var017986-ship-it/tsb-skript
--- Features: 1. ULTRA SUPER FLING Engine (SimulationRadius & CFrame Jitter)
---           2. GAROU TELEPORT VOID TRAP (Heartbeat Sync + Proximity Check)
---           3. SAITAMA GOJO VFX Skills (1, 2, 3, 4)
---           4. ADVANCED ANTI-FLING Engine
+-- Features: 1. CONTINUOUS TARGET FLING (Start / Stop Flinging specific player)
+--           2. GAROU VOID PLATFORM (Stay on Platform vs Return to Arena option)
+--           3. RETURN TO ARENA BUTTON & HOTKEY
+--           4. SAITAMA GOJO VFX Skills (1, 2, 3, 4)
+--           5. ADVANCED ANTI-FLING ENGINE
 -- ====================================================================
 
 local Players = game:GetService("Players")
@@ -25,8 +26,13 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
 end)
 
 _G.TSB_AntiFling = true
-_G.TSB_LoopFling = false
+_G.TSB_LoopFlingAll = false
 _G.TSB_GarouVoidTrap = false
+_G.TSB_StayOnVoidPlatform = true
+_G.TSB_TargetLoopFling = false
+_G.TSB_TargetPlayerObj = nil
+
+local savedArenaCFrame = nil
 
 local function notify(title, text)
     pcall(function()
@@ -75,7 +81,7 @@ end
 setupAntiFling()
 
 -----------------------------------------------------------------------
--- 2. ULTRA SUPER FLING ENGINE (FIXED & EXTREME SPEED)
+-- 2. ULTRA SUPER FLING ENGINE (SINGLE & CONTINUOUS TARGET FLING)
 -----------------------------------------------------------------------
 local function superFlingTarget(targetChar)
     if not targetChar then return end
@@ -87,7 +93,6 @@ local function superFlingTarget(targetChar)
 
     local oldCF = myRoot.CFrame
     
-    -- Body Gyro & Angular Velocity for max torque
     local bg = Instance.new("BodyGyro")
     bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
     bg.P = 9e9
@@ -101,10 +106,9 @@ local function superFlingTarget(targetChar)
     bav.Parent = myRoot
 
     local startTime = tick()
-    while tick() - startTime < 1.2 do
+    while tick() - startTime < 0.6 do
         if not targetRoot or not targetRoot.Parent or targetHum.Health <= 0 then break end
         
-        -- High-frequency physical jitter right against target HRP
         myRoot.CFrame = targetRoot.CFrame * CFrame.new(math.random(-1, 1), 0, math.random(-1, 1))
         myRoot.AssemblyLinearVelocity = Vector3.new(999999, 999999, 999999)
         myRoot.AssemblyAngularVelocity = Vector3.new(0, 9999999, 0)
@@ -119,32 +123,44 @@ local function superFlingTarget(targetChar)
         if Character and Character:FindFirstChild("HumanoidRootPart") then
             Character.HumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
             Character.HumanoidRootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-            Character.HumanoidRootPart.CFrame = oldCF
+            if not _G.TSB_TargetLoopFling then
+                Character.HumanoidRootPart.CFrame = oldCF
+            end
         end
     end)
 end
 
+-- Continuous Target Fling Background Task
+task.spawn(function()
+    while task.wait(0.1) do
+        if _G.TSB_TargetLoopFling and _G.TSB_TargetPlayerObj then
+            if _G.TSB_TargetPlayerObj.Character and _G.TSB_TargetPlayerObj.Character:FindFirstChild("HumanoidRootPart") then
+                superFlingTarget(_G.TSB_TargetPlayerObj.Character)
+            end
+        end
+    end
+end)
+
+-- Loop Fling All Players Background Task
 local function flingAllPlayers()
-    notify("TSB Super Fling", "🌀 Запуск мощного Флинга всех игроков...")
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character then
             superFlingTarget(p.Character)
-            task.wait(0.05)
+            task.wait(0.04)
         end
     end
-    notify("TSB Super Fling", "✅ Все игроки отправлены за карту!")
 end
 
 task.spawn(function()
     while task.wait(0.5) do
-        if _G.TSB_LoopFling then
+        if _G.TSB_LoopFlingAll then
             flingAllPlayers()
         end
     end
 end)
 
 -----------------------------------------------------------------------
--- 3. GAROU (HERO HUNTER) VOID TELEPORT ENGINE (FIXED & RELIABLE)
+-- 3. GAROU VOID TELEPORT ENGINE (STAY ON PLATFORM OR RETURN)
 -----------------------------------------------------------------------
 local voidPlatform = nil
 local function getOrCreateVoidPlatform()
@@ -153,7 +169,7 @@ local function getOrCreateVoidPlatform()
     end
     local plate = Instance.new("Part")
     plate.Name = "TSB_GarouVoidPlatform"
-    plate.Size = Vector3.new(200, 8, 200)
+    plate.Size = Vector3.new(250, 8, 250)
     plate.CFrame = CFrame.new(9999, 6000, 9999)
     plate.Anchored = true
     plate.CanCollide = true
@@ -180,51 +196,53 @@ local function getNearestPlayer(maxDist)
     return closest
 end
 
-local isGarouTeleporting = false
 local function executeGarouVoidTeleport()
-    if isGarouTeleporting then return end
-    isGarouTeleporting = true
+    pcall(function()
+        local myRoot = Character and Character:FindFirstChild("HumanoidRootPart")
+        if not myRoot then return end
 
-    task.spawn(function()
-        pcall(function()
-            local myRoot = Character and Character:FindFirstChild("HumanoidRootPart")
-            if not myRoot then isGarouTeleporting = false return end
+        if not savedArenaCFrame then
+            savedArenaCFrame = myRoot.CFrame
+        end
 
-            local origCF = myRoot.CFrame
-            getOrCreateVoidPlatform()
+        getOrCreateVoidPlatform()
+        local targetPlayer = getNearestPlayer(40)
 
-            -- Find target near Garou
-            local targetPlayer = getNearestPlayer(40)
+        notify("Garou Teleport", "⚡ Телепорт на небесную платформу...")
+        task.wait(0.15)
 
-            notify("Garou Teleport", "⚡ Активация телепорта за карту...")
+        local voidCF = CFrame.new(9999, 6006, 9999)
 
-            -- Wait 0.15s for Garou combo grab to lock target
-            task.wait(0.15)
-
-            -- Continuous Heartbeat Teleport loop for 1.4 seconds to guarantee server sync
-            local voidCF = CFrame.new(9999, 6006, 9999)
-            local startTime = tick()
-
-            while tick() - startTime < 1.4 do
-                if Character and Character:FindFirstChild("HumanoidRootPart") then
-                    Character.HumanoidRootPart.CFrame = voidCF
-                    if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                        -- Pull target alongside if needed
-                        targetPlayer.Character.HumanoidRootPart.CFrame = voidCF * CFrame.new(0, 0, -2)
-                    end
-                end
-                RunService.Heartbeat:Wait()
+        -- Teleport both to platform
+        if Character and Character:FindFirstChild("HumanoidRootPart") then
+            Character.HumanoidRootPart.CFrame = voidCF
+            if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                targetPlayer.Character.HumanoidRootPart.CFrame = voidCF * CFrame.new(0, 0, -3)
             end
+        end
 
-            -- Return LocalPlayer back to original fight spot
-            if Character and Character:FindFirstChild("HumanoidRootPart") then
-                Character.HumanoidRootPart.CFrame = origCF
+        if not _G.TSB_StayOnVoidPlatform then
+            task.wait(2.0)
+            if Character and Character:FindFirstChild("HumanoidRootPart") and savedArenaCFrame then
+                Character.HumanoidRootPart.CFrame = savedArenaCFrame
             end
-
-            notify("Garou Teleport", "🌌 Цель сброшена за карту!")
-        end)
-        isGarouTeleporting = false
+            notify("Garou Teleport", "🏠 Возврат на арену...")
+        else
+            notify("Garou Teleport", "🌌 Вы остались на небесной платформе!")
+        end
     end)
+end
+
+local function returnToArena()
+    if Character and Character:FindFirstChild("HumanoidRootPart") then
+        if savedArenaCFrame then
+            Character.HumanoidRootPart.CFrame = savedArenaCFrame
+            notify("TSB Hub", "🏠 Вы вернулись на арену!")
+        else
+            Character.HumanoidRootPart.CFrame = CFrame.new(0, 50, 0)
+            notify("TSB Hub", "🏠 Телепорт в центр спавна!")
+        end
+    end
 end
 
 -----------------------------------------------------------------------
@@ -375,8 +393,9 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     elseif input.KeyCode == Enum.KeyCode.Four then
         spawnGojoVFX(4)
     elseif input.KeyCode == Enum.KeyCode.T then
-        -- Manual Hotkey T for Garou Teleport Void
         executeGarouVoidTeleport()
+    elseif input.KeyCode == Enum.KeyCode.R then
+        returnToArena()
     end
 end)
 
@@ -402,8 +421,8 @@ end
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 320, 0, 400)
-MainFrame.Position = UDim2.new(0.05, 0, 0.2, 0)
+MainFrame.Size = UDim2.new(0, 330, 0, 470)
+MainFrame.Position = UDim2.new(0.05, 0, 0.15, 0)
 MainFrame.BackgroundColor3 = Color3.fromRGB(16, 16, 26)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -417,7 +436,7 @@ UICorner.Parent = MainFrame
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, 0, 0, 42)
 TitleLabel.BackgroundColor3 = Color3.fromRGB(140, 0, 255)
-TitleLabel.Text = "⚡ TSB MASTER HUB v16.0 (FIXED)"
+TitleLabel.Text = "⚡ TSB MASTER HUB v17.0"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleLabel.Font = Enum.Font.SourceSansBold
 TitleLabel.TextSize = 14
@@ -429,13 +448,13 @@ TitleCorner.Parent = TitleLabel
 
 -- Garou Void Trap Toggle Button
 local GarouBtn = Instance.new("TextButton")
-GarouBtn.Size = UDim2.new(1, -24, 0, 36)
-GarouBtn.Position = UDim2.new(0, 12, 0, 52)
+GarouBtn.Size = UDim2.new(1, -24, 0, 34)
+GarouBtn.Position = UDim2.new(0, 12, 0, 50)
 GarouBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
 GarouBtn.Text = "🐺 GAROU VOID TRAP (1&2 / T): ВЫКЛ"
 GarouBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 GarouBtn.Font = Enum.Font.SourceSansBold
-GarouBtn.TextSize = 12
+GarouBtn.TextSize = 11
 GarouBtn.Parent = MainFrame
 
 local GarouCorner = Instance.new("UICorner")
@@ -447,7 +466,7 @@ GarouBtn.MouseButton1Click:Connect(function()
     if _G.TSB_GarouVoidTrap then
         GarouBtn.Text = "🐺 GAROU VOID TRAP (1&2 / T): ВКЛ"
         GarouBtn.BackgroundColor3 = Color3.fromRGB(160, 40, 240)
-        notify("Garou Mode", "🌌 Выброс за карту для Гароу ВКЛЮЧЕН! (Жми 1, 2 или клавишу T)")
+        notify("Garou Mode", "🌌 Выброс за карту ВКЛЮЧЕН!")
     else
         GarouBtn.Text = "🐺 GAROU VOID TRAP (1&2 / T): ВЫКЛ"
         GarouBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
@@ -455,34 +474,60 @@ GarouBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Garou Manual Teleport Button
-local GarouManualBtn = Instance.new("TextButton")
-GarouManualBtn.Size = UDim2.new(1, -24, 0, 36)
-GarouManualBtn.Position = UDim2.new(0, 12, 0, 96)
-GarouManualBtn.BackgroundColor3 = Color3.fromRGB(120, 30, 200)
-GarouManualBtn.Text = "⚡ ТЕЛЕПОРТИРОВАТЬ БЛИЖНЕГО (КЛАВИША T)"
-GarouManualBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-GarouManualBtn.Font = Enum.Font.SourceSansBold
-GarouManualBtn.TextSize = 11
-GarouManualBtn.Parent = MainFrame
+-- Stay On Void Platform Toggle Button
+local StayPlatformBtn = Instance.new("TextButton")
+StayPlatformBtn.Size = UDim2.new(1, -24, 0, 34)
+StayPlatformBtn.Position = UDim2.new(0, 12, 0, 90)
+StayPlatformBtn.BackgroundColor3 = Color3.fromRGB(40, 160, 220)
+StayPlatformBtn.Text = "🌌 ОСТАВАТЬСЯ НА ПЛАТФОРМЕ: ВКЛ"
+StayPlatformBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+StayPlatformBtn.Font = Enum.Font.SourceSansBold
+StayPlatformBtn.TextSize = 11
+StayPlatformBtn.Parent = MainFrame
 
-local GarouManualCorner = Instance.new("UICorner")
-GarouManualCorner.CornerRadius = UDim.new(0, 8)
-GarouManualCorner.Parent = GarouManualBtn
+local StayCorner = Instance.new("UICorner")
+StayCorner.CornerRadius = UDim.new(0, 8)
+StayCorner.Parent = StayPlatformBtn
 
-GarouManualBtn.MouseButton1Click:Connect(function()
-    executeGarouVoidTeleport()
+StayPlatformBtn.MouseButton1Click:Connect(function()
+    _G.TSB_StayOnVoidPlatform = not _G.TSB_StayOnVoidPlatform
+    if _G.TSB_StayOnVoidPlatform then
+        StayPlatformBtn.Text = "🌌 ОСТАВАТЬСЯ НА ПЛАТФОРМЕ: ВКЛ"
+        StayPlatformBtn.BackgroundColor3 = Color3.fromRGB(40, 160, 220)
+    else
+        StayPlatformBtn.Text = "🌌 ОСТАВАТЬСЯ НА ПЛАТФОРМЕ: ВЫКЛ (АВТО-ВОЗВРАТ)"
+        StayPlatformBtn.BackgroundColor3 = Color3.fromRGB(220, 100, 40)
+    end
+end)
+
+-- Return to Arena Button
+local ReturnBtn = Instance.new("TextButton")
+ReturnBtn.Size = UDim2.new(1, -24, 0, 34)
+ReturnBtn.Position = UDim2.new(0, 12, 0, 130)
+ReturnBtn.BackgroundColor3 = Color3.fromRGB(120, 30, 200)
+ReturnBtn.Text = "🏠 ВЕРНУТЬСЯ НА АРЕНУ (КЛАВИША R)"
+ReturnBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ReturnBtn.Font = Enum.Font.SourceSansBold
+ReturnBtn.TextSize = 11
+ReturnBtn.Parent = MainFrame
+
+local ReturnCorner = Instance.new("UICorner")
+ReturnCorner.CornerRadius = UDim.new(0, 8)
+ReturnCorner.Parent = ReturnBtn
+
+ReturnBtn.MouseButton1Click:Connect(function()
+    returnToArena()
 end)
 
 -- Anti Fling Button
 local AntiFlingBtn = Instance.new("TextButton")
-AntiFlingBtn.Size = UDim2.new(1, -24, 0, 36)
-AntiFlingBtn.Position = UDim2.new(0, 12, 0, 140)
+AntiFlingBtn.Size = UDim2.new(1, -24, 0, 34)
+AntiFlingBtn.Position = UDim2.new(0, 12, 0, 170)
 AntiFlingBtn.BackgroundColor3 = Color3.fromRGB(40, 170, 80)
 AntiFlingBtn.Text = "🛡️ ANTI-FLING: ВКЛЮЧЕН"
 AntiFlingBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 AntiFlingBtn.Font = Enum.Font.SourceSansBold
-AntiFlingBtn.TextSize = 12
+AntiFlingBtn.TextSize = 11
 AntiFlingBtn.Parent = MainFrame
 
 local BtnCorner1 = Instance.new("UICorner")
@@ -500,58 +545,76 @@ AntiFlingBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Target Input
+-- Target Username Input
 local TargetInput = Instance.new("TextBox")
-TargetInput.Size = UDim2.new(1, -24, 0, 36)
-TargetInput.Position = UDim2.new(0, 12, 0, 184)
-TargetInput.PlaceholderText = "Введите ник игрока..."
+TargetInput.Size = UDim2.new(1, -24, 0, 34)
+TargetInput.Position = UDim2.new(0, 12, 0, 210)
+TargetInput.PlaceholderText = "Введите ник жертвы для Флинга..."
 TargetInput.Text = ""
 TargetInput.BackgroundColor3 = Color3.fromRGB(35, 35, 48)
 TargetInput.TextColor3 = Color3.fromRGB(255, 255, 255)
 TargetInput.Font = Enum.Font.SourceSans
-TargetInput.TextSize = 13
+TargetInput.TextSize = 12
 TargetInput.Parent = MainFrame
 
 local InputCorner = Instance.new("UICorner")
 InputCorner.CornerRadius = UDim.new(0, 8)
 InputCorner.Parent = TargetInput
 
--- Fling Target Button
-local FlingTargetBtn = Instance.new("TextButton")
-FlingTargetBtn.Size = UDim2.new(1, -24, 0, 36)
-FlingTargetBtn.Position = UDim2.new(0, 12, 0, 228)
-FlingTargetBtn.BackgroundColor3 = Color3.fromRGB(210, 40, 60)
-FlingTargetBtn.Text = "🎯 СУПЕР ФЛИНГ ЦЕЛИ"
-FlingTargetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-FlingTargetBtn.Font = Enum.Font.SourceSansBold
-FlingTargetBtn.TextSize = 12
-FlingTargetBtn.Parent = MainFrame
+-- Start / Stop Loop Fling Target Button
+local ToggleTargetFlingBtn = Instance.new("TextButton")
+ToggleTargetFlingBtn.Size = UDim2.new(1, -24, 0, 34)
+ToggleTargetFlingBtn.Position = UDim2.new(0, 12, 0, 250)
+ToggleTargetFlingBtn.BackgroundColor3 = Color3.fromRGB(210, 40, 60)
+ToggleTargetFlingBtn.Text = "💥 СТАРТ ФЛИНГ ЦЕЛИ (БЕСКОНЕЧНО)"
+ToggleTargetFlingBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleTargetFlingBtn.Font = Enum.Font.SourceSansBold
+ToggleTargetFlingBtn.TextSize = 11
+ToggleTargetFlingBtn.Parent = MainFrame
 
-local BtnCorner2 = Instance.new("UICorner")
-BtnCorner2.CornerRadius = UDim.new(0, 8)
-BtnCorner2.Parent = FlingTargetBtn
+local TargetCorner = Instance.new("UICorner")
+TargetCorner.CornerRadius = UDim.new(0, 8)
+TargetCorner.Parent = ToggleTargetFlingBtn
 
-FlingTargetBtn.MouseButton1Click:Connect(function()
-    local name = TargetInput.Text
-    if name ~= "" then
-        for _, p in ipairs(Players:GetPlayers()) do
-            if string.sub(string.lower(p.Name), 1, #name) == string.lower(name) or string.sub(string.lower(p.DisplayName), 1, #name) == string.lower(name) then
-                superFlingTarget(p.Character)
-                break
+ToggleTargetFlingBtn.MouseButton1Click:Connect(function()
+    _G.TSB_TargetLoopFling = not _G.TSB_TargetLoopFling
+    if _G.TSB_TargetLoopFling then
+        local name = TargetInput.Text
+        local foundPlayer = nil
+        if name ~= "" then
+            for _, p in ipairs(Players:GetPlayers()) do
+                if string.sub(string.lower(p.Name), 1, #name) == string.lower(name) or string.sub(string.lower(p.DisplayName), 1, #name) == string.lower(name) then
+                    foundPlayer = p
+                    break
+                end
             end
         end
+        if foundPlayer then
+            _G.TSB_TargetPlayerObj = foundPlayer
+            ToggleTargetFlingBtn.Text = "🛑 ОСТАНОВИТЬ ФЛИНГ: " .. string.upper(foundPlayer.Name)
+            ToggleTargetFlingBtn.BackgroundColor3 = Color3.fromRGB(220, 30, 30)
+            notify("Target Fling", "💥 Бесконечный флинг начат для " .. foundPlayer.Name)
+        else
+            _G.TSB_TargetLoopFling = false
+            notify("Target Fling", "❌ Игрок с таким ником не найден!")
+        end
+    else
+        _G.TSB_TargetPlayerObj = nil
+        ToggleTargetFlingBtn.Text = "💥 СТАРТ ФЛИНГ ЦЕЛИ (БЕСКОНЕЧНО)"
+        ToggleTargetFlingBtn.BackgroundColor3 = Color3.fromRGB(210, 40, 60)
+        notify("Target Fling", "🛑 Флинг цели остановлен!")
     end
 end)
 
--- Fling All Button
+-- Single Fling All Button
 local FlingAllBtn = Instance.new("TextButton")
-FlingAllBtn.Size = UDim2.new(1, -24, 0, 36)
-FlingAllBtn.Position = UDim2.new(0, 12, 0, 272)
+FlingAllBtn.Size = UDim2.new(1, -24, 0, 34)
+FlingAllBtn.Position = UDim2.new(0, 12, 0, 290)
 FlingAllBtn.BackgroundColor3 = Color3.fromRGB(190, 30, 90)
-FlingAllBtn.Text = "💥 СУПЕР ФЛИНГ ВСЕХ (1 РАЗ)"
+FlingAllBtn.Text = "💥 ФЛИНГНУТЬ ВСЕХ (1 РАЗ)"
 FlingAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 FlingAllBtn.Font = Enum.Font.SourceSansBold
-FlingAllBtn.TextSize = 12
+FlingAllBtn.TextSize = 11
 FlingAllBtn.Parent = MainFrame
 
 local BtnCorner3 = Instance.new("UICorner")
@@ -562,15 +625,15 @@ FlingAllBtn.MouseButton1Click:Connect(function()
     task.spawn(flingAllPlayers)
 end)
 
--- Loop Fling Button
+-- Loop Fling All Button
 local LoopFlingBtn = Instance.new("TextButton")
-LoopFlingBtn.Size = UDim2.new(1, -24, 0, 36)
-LoopFlingBtn.Position = UDim2.new(0, 12, 0, 316)
+LoopFlingBtn.Size = UDim2.new(1, -24, 0, 34)
+LoopFlingBtn.Position = UDim2.new(0, 12, 0, 330)
 LoopFlingBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
 LoopFlingBtn.Text = "⚡ АВТО-ФЛИНГ ВСЕХ: ВЫКЛ"
 LoopFlingBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 LoopFlingBtn.Font = Enum.Font.SourceSansBold
-LoopFlingBtn.TextSize = 12
+LoopFlingBtn.TextSize = 11
 LoopFlingBtn.Parent = MainFrame
 
 local BtnCorner4 = Instance.new("UICorner")
@@ -578,8 +641,8 @@ BtnCorner4.CornerRadius = UDim.new(0, 8)
 BtnCorner4.Parent = LoopFlingBtn
 
 LoopFlingBtn.MouseButton1Click:Connect(function()
-    _G.TSB_LoopFling = not _G.TSB_LoopFling
-    if _G.TSB_LoopFling then
+    _G.TSB_LoopFlingAll = not _G.TSB_LoopFlingAll
+    if _G.TSB_LoopFlingAll then
         LoopFlingBtn.Text = "⚡ АВТО-ФЛИНГ ВСЕХ: ВКЛ"
         LoopFlingBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
     else
@@ -589,14 +652,14 @@ LoopFlingBtn.MouseButton1Click:Connect(function()
 end)
 
 local InfoLabel = Instance.new("TextLabel")
-InfoLabel.Size = UDim2.new(1, -24, 0, 36)
-InfoLabel.Position = UDim2.new(0, 12, 0, 358)
+InfoLabel.Size = UDim2.new(1, -24, 0, 40)
+InfoLabel.Position = UDim2.new(0, 12, 0, 375)
 InfoLabel.BackgroundTransparency = 1
-InfoLabel.Text = "Garou Void: Keys 1, 2 or T | Gojo: Keys 1-4"
+InfoLabel.Text = "Hotkeys: T (Void Teleport), R (Return Arena), 1-4 (Gojo / Garou)"
 InfoLabel.TextColor3 = Color3.fromRGB(170, 170, 200)
 InfoLabel.TextSize = 11
 InfoLabel.Font = Enum.Font.SourceSans
 InfoLabel.Parent = MainFrame
 
-notify("TSB Master Hub v16.0", "✅ Загружен! Супер Флинг + Гароу ТП (T) исправлены!")
-print("[+] TSB Master Hub v16.0 Loaded Successfully.")
+notify("TSB Master Hub v17.0", "✅ Готово! Старт/Стоп флинга цели + Платформа Гароу")
+print("[+] TSB Master Hub v17.0 Loaded Successfully.")
